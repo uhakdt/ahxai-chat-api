@@ -1,2 +1,4 @@
+from routes import app
+
 if __name__ == "__main__":
-  print("test")
+  app.run(debug=False, port=8283, host='0.0.0.0')
