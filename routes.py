@@ -1,12 +1,12 @@
 import os
+import json
 from dotenv import load_dotenv
-
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-
 from openai import OpenAI
 from utils import serialize_run_step
 from file_utils import determine_content_type
+from log_config import setup_logger
 
 load_dotenv()
 
@@ -15,11 +15,15 @@ CORS(app)
 
 client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
+logger = setup_logger()
+
 @app.route('/', methods=['GET'])
 def _():
     try:
+        logger.info("Health check endpoint hit")
         return jsonify({"status": "Ok"}), 200
     except Exception as e:
+        logger.error(f"Error in health check: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 # Create Thread
@@ -27,8 +31,10 @@ def _():
 def create_thread():
     try:
         thread = client.beta.threads.create()
+        logger.info(f"Created thread with ID: {thread.id}")
         return jsonify({"thread_id": thread.id}), 200
     except Exception as e:
+        logger.error(f"Error creating thread: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 # Add Message to Thread and Run
@@ -38,6 +44,8 @@ def add_message():
         message = request.json.get('message')
         thread_id = request.json.get('thread_id')
         assistant_id = request.json.get('assistant_id')
+
+        logger.info(f"Adding message to thread: {thread_id}, message: {message}")
 
         client.beta.threads.messages.create(
             thread_id=thread_id,
@@ -50,12 +58,15 @@ def add_message():
             assistant_id=assistant_id
         )
 
+        logger.info(f"Created run with ID: {run.id}")
+
         return jsonify({"run_id": run.id}), 200
     except Exception as e:
+        logger.error(f"Error adding message: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 # Get Run
-@app.route('/get-run', methods=['GET'])
+@app.route('/get-run', methods=['POST'])
 def get_run():
     try:
         thread_id = request.json.get('thread_id')
@@ -75,8 +86,11 @@ def get_run():
 
         serialized_run_steps = [serialize_run_step(client, step) for step in run_steps]
 
+        logger.info(f"Retrieved and serialized run: {run_id} for thread: {thread_id}")
+        
         return jsonify({"status": status, "run_steps": serialized_run_steps}), 200
     except Exception as e:
+        logger.error(f"Error retrieving run: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 # FILES - GET FILE
@@ -85,6 +99,7 @@ def get_file():
     try:
         file_id = request.json.get('file_id')
         if not file_id:
+            logger.warning("file_id is required but not provided")
             return jsonify({"error": "file_id is required"}), 400
 
         file_info = client.files.retrieve(file_id)
@@ -92,6 +107,9 @@ def get_file():
 
         file_data = client.files.with_raw_response.retrieve_content(file_id).content
 
+        logger.info(f"Retrieved file with ID: {file_id}")
+
         return file_data, 200, {"Content-Type": content_type}
     except Exception as e:
+        logger.error(f"Error retrieving file: {str(e)}")
         return jsonify({"error": str(e)}), 500
