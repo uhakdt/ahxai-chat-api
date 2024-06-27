@@ -1,24 +1,12 @@
-import os
-import json
-from dotenv import load_dotenv
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from openai import OpenAI
+from flask import Blueprint, jsonify, request
+from flask_setup import client, logger
 from utils import serialize_run_step
 from file_utils import determine_content_type
-from log_config import setup_logger
 
-load_dotenv()
+api = Blueprint('api', __name__, url_prefix='/api')
 
-app = Flask(__name__)
-CORS(app)
-
-client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
-
-logger = setup_logger()
-
-@app.route('/', methods=['GET'])
-def _():
+@api.route('/', methods=['GET'])
+def health_check():
     try:
         logger.info("Health check endpoint hit")
         return jsonify({"status": "Ok"}), 200
@@ -27,7 +15,7 @@ def _():
         return jsonify({"error": str(e)}), 500
 
 # Create Thread
-@app.route('/create-thread', methods=['POST'])
+@api.route('/create-thread', methods=['POST'])
 def create_thread():
     try:
         thread = client.beta.threads.create()
@@ -38,7 +26,7 @@ def create_thread():
         return jsonify({"error": str(e)}), 500
 
 # Add Message to Thread and Run
-@app.route('/add-message', methods=['POST'])
+@api.route('/add-message', methods=['POST'])
 def add_message():
     try:
         message = request.json.get('message')
@@ -66,7 +54,7 @@ def add_message():
         return jsonify({"error": str(e)}), 500
 
 # Get Run
-@app.route('/get-run', methods=['POST'])
+@api.route('/get-run', methods=['POST'])
 def get_run():
     try:
         thread_id = request.json.get('thread_id')
@@ -94,7 +82,7 @@ def get_run():
         return jsonify({"error": str(e)}), 500
 
 # FILES - GET FILE
-@app.route('/get-file', methods=['POST'])
+@api.route('/get-file', methods=['POST'])
 def get_file():
     try:
         file_id = request.json.get('file_id')
