@@ -6,9 +6,9 @@ def serialize_content(content):
                 "value": content.text.value,
             }
         }
-    elif content.type == "image_file":
+    elif content.type in ["image_file", "image"]:
         return {
-            "type": content.type,
+            "type": "image",
             "image_file": {
                 "file_id": content.image_file.file_id,
             }
