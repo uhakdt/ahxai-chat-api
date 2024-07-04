@@ -1,9 +1,9 @@
 import os
-from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, Blueprint
 from flask_cors import CORS
-
-load_dotenv()
+from routes.routes import api
 
 app = Flask(__name__)
 CORS(app)
+
+app.register_blueprint(api)
