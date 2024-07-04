@@ -1,4 +1,4 @@
-from flask_setup import app
+from config.flask import app
 from routes import api
 
 app.register_blueprint(api)

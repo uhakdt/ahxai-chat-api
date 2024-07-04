@@ -1,5 +1,5 @@
-import logging
 import os
+import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
 
@@ -50,7 +50,3 @@ def setup_logger():
     werkzeug_logger.propagate = False
 
     return logger
-
-# Ensure that any root loggers do not interfere
-logging.getLogger().setLevel(logging.DEBUG)
-logging.getLogger().handlers = [h for h in logging.getLogger().handlers if not isinstance(h, logging.StreamHandler)]

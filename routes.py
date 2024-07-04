@@ -1,8 +1,14 @@
+import io
+from PIL import Image
 from flask import Blueprint, jsonify, request
-from flask_setup import client, logger
-from utils import serialize_run_step
-from file_utils import determine_content_type
+from openai import OpenAI
 
+from utils.serializers import serialize_run_step
+from utils.file_utils import determine_content_type
+from config.logging import setup_logger
+
+logger = setup_logger()
+client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 api = Blueprint('api', __name__, url_prefix='/api')
 
 @api.route('/', methods=['GET'])
@@ -95,9 +101,24 @@ def get_file():
 
         file_data = client.files.with_raw_response.retrieve_content(file_id).content
 
-        logger.info(f"Retrieved file with ID: {file_id}")
+        if content_type != 'application/octet-stream':
+            logger.warning(f"File {file_id} is not an octet-stream, it is {content_type}")
+            return jsonify({"error": "File is not an octet-stream"}), 400
 
-        return file_data, 200, {"Content-Type": content_type}
+        # Convert the octet-stream to a PNG image
+        image = Image.open(io.BytesIO(file_data))
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+
+        logger.info(f"Retrieved and converted file with ID: {file_id}")
+
+        return send_file(
+            img_byte_arr,
+            mimetype='image/png',
+            as_attachment=True,
+            download_name=f"{file_info.filename}.png"
+        )
     except Exception as e:
         logger.error(f"Error retrieving file: {str(e)}")
         return jsonify({"error": str(e)}), 500
