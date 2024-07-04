@@ -1,6 +1,8 @@
+import os
+import json
 import io
 from PIL import Image
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from openai import OpenAI
 
 from utils.serializers import serialize_run_step
@@ -10,6 +12,42 @@ from config.logging import setup_logger
 logger = setup_logger()
 client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 api = Blueprint('api', __name__, url_prefix='/api')
+
+# File to store threads
+THREADS_FILE = "threads.json"
+if not os.path.exists(THREADS_FILE):
+    with open(THREADS_FILE, 'w') as f:
+        json.dump({}, f, indent=4)
+
+def write_to_json(thread_id, data):
+    with open(THREADS_FILE, 'r') as f:
+        file_data = json.load(f)
+
+    if thread_id not in file_data:
+        file_data[thread_id] = []
+
+    file_data[thread_id].append(data)
+
+    with open(THREADS_FILE, 'w') as f:
+        json.dump(file_data, f, indent=4)
+
+def update_run_steps(thread_id, run_id, serialized_run_steps, status):
+    with open(THREADS_FILE, 'r') as f:
+        file_data = json.load(f)
+
+    if thread_id in file_data:
+        for entry in file_data[thread_id]:
+            if entry["server"]["run_id"] == run_id:
+                if status == "completed":
+                    entry["server"]["run_steps"] = serialized_run_steps
+                    entry["server"]["status"] = status
+                else:
+                    entry["server"]["run_steps"] = []
+                    entry["server"]["status"] = "in_progress"
+                break
+
+    with open(THREADS_FILE, 'w') as f:
+        json.dump(file_data, f, indent=4)
 
 @api.route('/', methods=['GET'])
 def health_check():
@@ -54,6 +92,19 @@ def add_message():
 
         logger.info(f"Created run with ID: {run.id}")
 
+        # Log the client message to JSON file
+        data = {
+            "client": {
+                "message": message
+            },
+            "server": {
+                "run_steps": [],
+                "status": "in_progress",
+                "run_id": run.id
+            }
+        }
+        write_to_json(thread_id, data)
+
         return jsonify({"run_id": run.id}), 200
     except Exception as e:
         logger.error(f"Error adding message: {str(e)}")
@@ -81,8 +132,19 @@ def get_run():
         serialized_run_steps = [serialize_run_step(client, step) for step in run_steps]
 
         logger.info(f"Retrieved and serialized run: {run_id} for thread: {thread_id}")
-        
-        return jsonify({"status": status, "run_steps": serialized_run_steps}), 200
+
+        # Update the JSON file with the run steps only if status is completed
+        if status == "completed":
+            update_run_steps(thread_id, run_id, serialized_run_steps, status)
+
+        # Prepare the response
+        server_response = {
+            "run_steps": serialized_run_steps if status == "completed" else [],
+            "status": status,
+            "run_id": run_id
+        }
+
+        return jsonify(server_response), 200
     except Exception as e:
         logger.error(f"Error retrieving run: {str(e)}")
         return jsonify({"error": str(e)}), 500

@@ -30,4 +30,5 @@ env.bak/
 venv.bak/
 
 # Logs
-.log
+*.log
+*.json
